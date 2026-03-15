@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>terraform-aws-rag-pipeline | Architecture</title>
+<style>
+:root{--ink:#0b0c0b;--accent:#c8420a;--surface:#141514;--border:#2a2b2a;--text:#d4d4d4;--muted:#8a8a8a;--card:#1a1b1a;--success:#2ea043;--warn:#d29922;--info:#388bfd}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--ink);color:var(--text);font-family:'SF Mono','Cascadia Code','Fira Code',monospace;font-size:15px;line-height:1.7;padding:0}
+a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
+.container{max-width:1200px;margin:0 auto;padding:2rem 1.5rem}
+header{border-bottom:2px solid var(--accent);padding:2rem 0;margin-bottom:3rem}
+header h1{font-size:1.8rem;color:#fff;margin-bottom:.5rem}
+header p{color:var(--muted);font-size:.95rem}
+h2{color:var(--accent);font-size:1.3rem;margin:2.5rem 0 1rem;padding-bottom:.5rem;border-bottom:1px solid var(--border)}
+h3{color:#fff;font-size:1.05rem;margin:1.5rem 0 .75rem}
+.badge{display:inline-block;padding:.2rem .6rem;border-radius:3px;font-size:.75rem;font-weight:600;margin-right:.5rem}
+.badge-accent{background:var(--accent);color:#fff}
+.badge-success{background:var(--success);color:#fff}
+.badge-info{background:var(--info);color:#fff}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:1rem;margin:1rem 0}
+.card{background:var(--card);border:1px solid var(--border);border-radius:6px;padding:1.25rem}
+.card h4{color:#fff;margin-bottom:.5rem;font-size:.95rem}
+.card p{color:var(--muted);font-size:.85rem}
+.card .num{font-size:1.8rem;color:var(--accent);font-weight:700}
+.diagram{background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:2rem;margin:1.5rem 0;overflow-x:auto}
+.flow{display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:.5rem}
+.flow-box{background:var(--card);border:2px solid var(--accent);border-radius:6px;padding:.75rem 1.25rem;text-align:center;min-width:140px;font-size:.85rem;color:#fff}
+.flow-box.alt{border-color:var(--info)}
+.flow-box.green{border-color:var(--success)}
+.flow-box.warn{border-color:var(--warn)}
+.flow-arrow{color:var(--accent);font-size:1.5rem;font-weight:700}
+.table-wrap{overflow-x:auto;margin:1rem 0}
+table{width:100%;border-collapse:collapse;font-size:.85rem}
+th{background:var(--surface);color:var(--accent);text-align:left;padding:.75rem;border:1px solid var(--border)}
+td{padding:.75rem;border:1px solid var(--border);color:var(--text)}
+tr:hover td{background:var(--surface)}
+.checklist{list-style:none;margin:1rem 0}
+.checklist li{padding:.4rem 0;padding-left:1.5rem;position:relative;font-size:.9rem}
+.checklist li::before{content:"[ ]";position:absolute;left:0;color:var(--accent);font-weight:700}
+code{background:var(--surface);padding:.15rem .4rem;border-radius:3px;font-size:.85rem;color:var(--accent)}
+pre{background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:1.25rem;overflow-x:auto;font-size:.85rem;line-height:1.5;margin:1rem 0}
+.section{margin-bottom:2rem}
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:1rem}
+@media(max-width:768px){.grid-2{grid-template-columns:1fr}.flow{flex-direction:column}.flow-arrow{transform:rotate(90deg)}}
+footer{border-top:1px solid var(--border);margin-top:3rem;padding:2rem 0;color:var(--muted);font-size:.8rem;text-align:center}
+</style>
+</head>
+<body>
+<div class="container">
+
+<header>
+<h1>terraform-aws-rag-pipeline</h1>
+<p>Architecture Document &mdash; AWS Retrieval-Augmented Generation Pipeline Module</p>
+<p><span class="badge badge-accent">Terraform &ge; 1.5.0</span><span class="badge badge-info">AWS Provider &ge; 5.0</span><span class="badge badge-success">MIT License</span></p>
+</header>
+
+<!-- Executive Summary -->
+<section class="section">
+<h2>Executive Summary</h2>
+<p>This Terraform module deploys a complete AWS Retrieval-Augmented Generation (RAG) pipeline using Amazon Bedrock Knowledge Bases, OpenSearch Serverless for vector storage, S3 for document ingestion, Lambda for triggering ingestion jobs, Step Functions for orchestration, and EventBridge for scheduling. It enables organisations to build AI-powered knowledge retrieval systems with configurable chunking strategies, embedding models, and automated ingestion workflows.</p>
+</section>
+
+<!-- Overview Cards -->
+<section class="section">
+<h2>Overview</h2>
+<div class="cards">
+<div class="card"><div class="num">7</div><h4>AWS Services</h4><p>Bedrock, OpenSearch Serverless, S3, Lambda, Step Functions, EventBridge, IAM</p></div>
+<div class="card"><div class="num">30</div><h4>Input Variables</h4><p>Knowledge base, OpenSearch, S3, Lambda, Step Functions, networking config</p></div>
+<div class="card"><div class="num">13</div><h4>Outputs</h4><p>KB ID/ARN, collection endpoints, bucket, Lambda/SFN ARNs, IAM roles</p></div>
+<div class="card"><div class="num">4</div><h4>Chunking Strategies</h4><p>FIXED_SIZE, NONE, HIERARCHICAL, SEMANTIC</p></div>
+</div>
+</section>
+
+<!-- Architecture Diagram -->
+<section class="section">
+<h2>Architecture Diagram</h2>
+<div class="diagram">
+<h3 style="text-align:center;margin-bottom:1.5rem;color:var(--muted)">Ingestion Pipeline</h3>
+<div class="flow">
+<div class="flow-box warn">EventBridge<br>Schedule</div>
+<div class="flow-arrow">&rarr;</div>
+<div class="flow-box">Step Functions<br>State Machine</div>
+<div class="flow-arrow">&rarr;</div>
+<div class="flow-box alt">Lambda<br>Ingestion</div>
+<div class="flow-arrow">&rarr;</div>
+<div class="flow-box">Bedrock<br>Knowledge Base</div>
+<div class="flow-arrow">&rarr;</div>
+<div class="flow-box green">Embedding<br>Model</div>
+<div class="flow-arrow">&rarr;</div>
+<div class="flow-box alt">OpenSearch<br>Serverless</div>
+</div>
+<h3 style="text-align:center;margin:2rem 0 1.5rem;color:var(--muted)">Data Source Flow</h3>
+<div class="flow">
+<div class="flow-box warn">S3 Bucket<br>(Documents)</div>
+<div class="flow-arrow">&rarr;</div>
+<div class="flow-box">Bedrock<br>Data Source</div>
+<div class="flow-arrow">&rarr;</div>
+<div class="flow-box">Chunking<br>Engine</div>
+<div class="flow-arrow">&rarr;</div>
+<div class="flow-box green">Vector<br>Embeddings</div>
+<div class="flow-arrow">&rarr;</div>
+<div class="flow-box alt">OpenSearch<br>Vector Index</div>
+</div>
+<h3 style="text-align:center;margin:2rem 0 1.5rem;color:var(--muted)">Query Path</h3>
+<div class="flow">
+<div class="flow-box">User Query</div>
+<div class="flow-arrow">&rarr;</div>
+<div class="flow-box alt">Bedrock<br>Retrieve API</div>
+<div class="flow-arrow">&rarr;</div>
+<div class="flow-box green">Relevant<br>Chunks</div>
+<div class="flow-arrow">&rarr;</div>
+<div class="flow-box warn">Foundation<br>Model</div>
+<div class="flow-arrow">&rarr;</div>
+<div class="flow-box">Generated<br>Response</div>
+</div>
+</div>
+</section>
+
+<!-- Component Breakdown -->
+<section class="section">
+<h2>Component Breakdown</h2>
+<div class="table-wrap">
+<table>
+<tr><th>Resource</th><th>Service</th><th>Purpose</th></tr>
+<tr><td><code>aws_s3_bucket.data_source</code></td><td>S3</td><td>Versioned, KMS-encrypted bucket for document storage with public access blocked</td></tr>
+<tr><td><code>aws_opensearchserverless_collection.this</code></td><td>OpenSearch</td><td>VECTORSEARCH collection with encryption, network, and data access policies</td></tr>
+<tr><td><code>aws_bedrockagent_knowledge_base.this</code></td><td>Bedrock</td><td>Knowledge Base with vector config pointing to OpenSearch collection</td></tr>
+<tr><td><code>aws_bedrockagent_data_source.this</code></td><td>Bedrock</td><td>S3 data source with configurable chunking strategy and inclusion prefixes</td></tr>
+<tr><td><code>aws_lambda_function.ingestion</code></td><td>Lambda</td><td>Python 3.12 function that triggers Bedrock ingestion jobs via boto3</td></tr>
+<tr><td><code>aws_sfn_state_machine.ingestion</code></td><td>Step Functions</td><td>Orchestrates ingestion: trigger &rarr; wait &rarr; poll status &rarr; complete/fail</td></tr>
+<tr><td><code>aws_scheduler_schedule.ingestion</code></td><td>EventBridge</td><td>Scheduled trigger for automated periodic ingestion (e.g., rate(1 day))</td></tr>
+<tr><td><code>aws_cloudwatch_log_group.lambda</code></td><td>CloudWatch</td><td>Log group with 30-day retention for Lambda function logs</td></tr>
+<tr><td><code>aws_iam_role.bedrock_kb</code></td><td>IAM</td><td>Least-privilege role for Bedrock KB to access S3 and OpenSearch</td></tr>
+<tr><td><code>aws_iam_role.lambda</code></td><td>IAM</td><td>Lambda execution role with Bedrock ingestion permissions</td></tr>
+<tr><td><code>aws_iam_role.sfn</code></td><td>IAM</td><td>Step Functions role with Lambda invoke and Bedrock SDK permissions</td></tr>
+</table>
+</div>
+</section>
+
+<!-- Data Flow -->
+<section class="section">
+<h2>Data Flow</h2>
+<div class="diagram">
+<ol style="list-style:decimal inside;color:var(--text);font-size:.9rem;line-height:2">
+<li><strong>Documents</strong> are uploaded to the S3 data source bucket under the configured prefix (default: <code>documents/</code>)</li>
+<li><strong>EventBridge Schedule</strong> triggers the Step Functions state machine on the configured cadence</li>
+<li><strong>Step Functions</strong> invokes the Lambda ingestion function with KB and data source IDs</li>
+<li><strong>Lambda</strong> calls <code>bedrock-agent:startIngestionJob</code> to begin processing</li>
+<li><strong>Bedrock</strong> reads documents from S3, applies the chunking strategy (FIXED_SIZE: 300 tokens, 20% overlap)</li>
+<li><strong>Embedding Model</strong> (amazon.titan-embed-text-v2:0) generates vector embeddings for each chunk</li>
+<li><strong>OpenSearch Serverless</strong> indexes the vectors into the configured index with text and metadata fields</li>
+<li><strong>Step Functions</strong> polls ingestion status every 30 seconds until COMPLETE or FAILED</li>
+<li><strong>Query path</strong>: Users call the Bedrock Retrieve API, which searches OpenSearch and returns relevant chunks</li>
+<li><strong>Foundation Model</strong> uses retrieved chunks as context to generate grounded responses</li>
+</ol>
+</div>
+</section>
+
+<!-- Security Controls -->
+<section class="section">
+<h2>Security Controls</h2>
+<div class="grid-2">
+<div class="card">
+<h4>S3 Encryption</h4>
+<p>KMS server-side encryption with bucket key enabled. Public access fully blocked on all four settings.</p>
+</div>
+<div class="card">
+<h4>OpenSearch Policies</h4>
+<p>Three-layer security: encryption policy, network policy, and data access policy with principal-based control.</p>
+</div>
+<div class="card">
+<h4>IAM Least Privilege</h4>
+<p>Dedicated IAM roles for Bedrock KB, Lambda, and Step Functions. Each scoped to minimum required permissions.</p>
+</div>
+<div class="card">
+<h4>Lambda Concurrency</h4>
+<p>Reserved concurrent executions (default: 5) prevent runaway invocations. 30-day log retention.</p>
+</div>
+<div class="card">
+<h4>S3 Versioning</h4>
+<p>Bucket versioning enabled to protect against accidental overwrites and deletions of source documents.</p>
+</div>
+<div class="card">
+<h4>Account Scoping</h4>
+<p>OpenSearch data access policy scoped to specific account IDs via allowed_account_ids variable.</p>
+</div>
+</div>
+</section>
+
+<!-- Industry Adaptation -->
+<section class="section">
+<h2>Industry Adaptation</h2>
+<div class="table-wrap">
+<table>
+<tr><th>Industry</th><th>Use Case</th><th>Configuration Focus</th></tr>
+<tr><td>Legal</td><td>Contract analysis and clause retrieval</td><td>SEMANTIC chunking, high embedding dimensions, compliance-grade S3 encryption</td></tr>
+<tr><td>Healthcare</td><td>Medical literature knowledge base</td><td>FIXED_SIZE chunking with high overlap, VPC-scoped OpenSearch, HIPAA tagging</td></tr>
+<tr><td>Financial Services</td><td>Regulatory document Q&amp;A</td><td>Scheduled daily ingestion, standby replicas enabled, KMS CMK encryption</td></tr>
+<tr><td>Customer Support</td><td>Product documentation assistant</td><td>HIERARCHICAL chunking, frequent ingestion schedule, low-latency configuration</td></tr>
+<tr><td>Education</td><td>Course material search</td><td>Large chunk sizes, broad prefix inclusion, cost-optimised standby disabled</td></tr>
+</table>
+</div>
+</section>
+
+<!-- Production Readiness Checklist -->
+<section class="section">
+<h2>Production Readiness Checklist</h2>
+<ul class="checklist">
+<li>Configure KMS CMK for S3 bucket encryption (instead of AWS-managed key)</li>
+<li>Enable OpenSearch standby replicas for high availability</li>
+<li>Set appropriate Lambda memory and timeout for document volume</li>
+<li>Configure ingestion schedule matching document update frequency</li>
+<li>Restrict allowed_account_ids to known accounts only</li>
+<li>Tune chunking strategy and parameters for your document type</li>
+<li>Set up CloudWatch alarms on Lambda errors and Step Function failures</li>
+<li>Enable VPC configuration for Lambda if network isolation is required</li>
+<li>Review and customise embedding model selection for your language/domain</li>
+<li>Tag all resources for cost allocation and compliance tracking</li>
+<li>Test ingestion pipeline with representative document corpus before go-live</li>
+<li>Configure S3 lifecycle policies for old document versions</li>
+</ul>
+</section>
+
+<!-- Config Reference -->
+<section class="section">
+<h2>Configuration Reference</h2>
+<h3>Key Variables</h3>
+<div class="table-wrap">
+<table>
+<tr><th>Variable</th><th>Type</th><th>Default</th><th>Description</th></tr>
+<tr><td><code>name</code></td><td>string</td><td>&mdash;</td><td>Name prefix for all resources</td></tr>
+<tr><td><code>embedding_model_id</code></td><td>string</td><td>amazon.titan-embed-text-v2:0</td><td>Embedding model for vector generation</td></tr>
+<tr><td><code>collection_type</code></td><td>string</td><td>VECTORSEARCH</td><td>OpenSearch collection type</td></tr>
+<tr><td><code>standby_replicas</code></td><td>string</td><td>DISABLED</td><td>OpenSearch standby replica setting</td></tr>
+<tr><td><code>chunking_strategy</code></td><td>string</td><td>FIXED_SIZE</td><td>Document chunking strategy</td></tr>
+<tr><td><code>chunk_max_tokens</code></td><td>number</td><td>300</td><td>Max tokens per chunk</td></tr>
+<tr><td><code>chunk_overlap_percentage</code></td><td>number</td><td>20</td><td>Overlap between consecutive chunks</td></tr>
+<tr><td><code>data_source_prefix</code></td><td>string</td><td>documents/</td><td>S3 prefix for source documents</td></tr>
+<tr><td><code>lambda_runtime</code></td><td>string</td><td>python3.12</td><td>Lambda runtime version</td></tr>
+<tr><td><code>lambda_timeout</code></td><td>number</td><td>900</td><td>Lambda timeout in seconds</td></tr>
+<tr><td><code>lambda_memory_size</code></td><td>number</td><td>512</td><td>Lambda memory in MB</td></tr>
+<tr><td><code>lambda_reserved_concurrency</code></td><td>number</td><td>5</td><td>Reserved concurrent Lambda executions</td></tr>
+<tr><td><code>ingestion_schedule</code></td><td>string</td><td>""</td><td>EventBridge schedule expression (e.g., rate(1 day))</td></tr>
+</table>
+</div>
+
+<h3>Outputs</h3>
+<div class="table-wrap">
+<table>
+<tr><th>Output</th><th>Description</th></tr>
+<tr><td><code>knowledge_base_id</code></td><td>ID of the Bedrock Knowledge Base</td></tr>
+<tr><td><code>knowledge_base_arn</code></td><td>ARN of the Bedrock Knowledge Base</td></tr>
+<tr><td><code>data_source_id</code></td><td>ID of the Bedrock data source</td></tr>
+<tr><td><code>collection_id / collection_arn / collection_endpoint</code></td><td>OpenSearch Serverless collection details</td></tr>
+<tr><td><code>data_source_bucket_id / data_source_bucket_arn</code></td><td>S3 data source bucket details</td></tr>
+<tr><td><code>ingestion_lambda_arn</code></td><td>ARN of the ingestion Lambda function</td></tr>
+<tr><td><code>state_machine_arn / state_machine_name</code></td><td>Step Functions state machine details</td></tr>
+<tr><td><code>bedrock_kb_role_arn / lambda_role_arn / sfn_role_arn</code></td><td>IAM role ARNs for each component</td></tr>
+</table>
+</div>
+</section>
+
+<!-- Deployment -->
+<section class="section">
+<h2>Deployment</h2>
+<pre>
+module "rag_pipeline" {
+  source = "path/to/terraform-aws-rag-pipeline"
+
+  name = "my-rag"
+
+  # Embedding
+  embedding_model_id = "amazon.titan-embed-text-v2:0"
+
+  # Chunking
+  chunking_strategy        = "FIXED_SIZE"
+  chunk_max_tokens         = 300
+  chunk_overlap_percentage = 20
+
+  # Data source
+  data_source_prefix = "documents/"
+
+  # Automation
+  ingestion_schedule = "rate(1 day)"
+
+  tags = {
+    Environment = "production"
+    Project     = "knowledge-base"
+  }
+}
+</pre>
+<pre>
+terraform init
+terraform plan
+terraform apply
+
+# Upload documents to trigger ingestion
+aws s3 cp ./documents/ s3://BUCKET_NAME/documents/ --recursive
+</pre>
+</section>
+
+<!-- Links -->
+<section class="section">
+<h2>Links</h2>
+<ul style="list-style:none;line-height:2.2">
+<li><a href="https://docs.aws.amazon.com/bedrock/latest/userguide/knowledge-base.html">Amazon Bedrock Knowledge Bases</a></li>
+<li><a href="https://docs.aws.amazon.com/opensearch-service/latest/developerguide/serverless.html">OpenSearch Serverless</a></li>
+<li><a href="https://docs.aws.amazon.com/step-functions/latest/dg/welcome.html">AWS Step Functions</a></li>
+<li><a href="https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/bedrockagent_knowledge_base">Terraform: aws_bedrockagent_knowledge_base</a></li>
+</ul>
+</section>
+
+<footer>
+<p>terraform-aws-rag-pipeline &middot; Architecture Document</p>
+<p>Generated for reference purposes. Review all configurations before production deployment.</p>
+</footer>
+
+</div>
+</body>
+</html>
