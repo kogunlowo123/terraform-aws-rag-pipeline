@@ -23,7 +23,7 @@ data "aws_iam_policy_document" "bedrock_assume_role" {
     condition {
       test     = "StringEquals"
       variable = "aws:SourceAccount"
-      values   = [local.account_id]
+      values   = [data.aws_caller_identity.current.account_id]
     }
   }
 }
@@ -36,7 +36,7 @@ data "aws_iam_policy_document" "bedrock_kb_policy" {
     actions = [
       "bedrock:InvokeModel",
     ]
-    resources = ["arn:${local.partition}:bedrock:${local.region}::foundation-model/${var.embedding_model_id}"]
+    resources = ["arn:${data.aws_partition.current.partition}:bedrock:${data.aws_region.current.name}::foundation-model/${var.embedding_model_id}"]
   }
 
   statement {
@@ -54,8 +54,8 @@ data "aws_iam_policy_document" "bedrock_kb_policy" {
       "s3:ListBucket",
     ]
     resources = [
-      local.data_source_bucket_arn,
-      "${local.data_source_bucket_arn}/*",
+      var.create_data_source_bucket ? aws_s3_bucket.data_source[0].arn : var.existing_bucket_arn,
+      "${var.create_data_source_bucket ? aws_s3_bucket.data_source[0].arn : var.existing_bucket_arn}/*",
     ]
   }
 }
@@ -88,7 +88,7 @@ data "aws_iam_policy_document" "lambda_policy" {
       "logs:CreateLogStream",
       "logs:PutLogEvents",
     ]
-    resources = ["arn:${local.partition}:logs:${local.region}:${local.account_id}:*"]
+    resources = ["arn:${data.aws_partition.current.partition}:logs:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:*"]
   }
 
   statement {
@@ -109,8 +109,8 @@ data "aws_iam_policy_document" "lambda_policy" {
       "s3:PutObject",
     ]
     resources = [
-      local.data_source_bucket_arn,
-      "${local.data_source_bucket_arn}/*",
+      var.create_data_source_bucket ? aws_s3_bucket.data_source[0].arn : var.existing_bucket_arn,
+      "${var.create_data_source_bucket ? aws_s3_bucket.data_source[0].arn : var.existing_bucket_arn}/*",
     ]
   }
 }

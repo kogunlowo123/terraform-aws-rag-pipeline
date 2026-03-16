@@ -5,10 +5,10 @@
 resource "aws_s3_bucket" "data_source" {
   count = var.create_data_source_bucket ? 1 : 0
 
-  bucket        = local.bucket_name
+  bucket        = var.data_source_bucket_name != "" ? var.data_source_bucket_name : "${var.name}-data-source"
   force_destroy = false
 
-  tags = local.common_tags
+  tags = var.tags
 }
 
 resource "aws_s3_bucket_versioning" "data_source" {
@@ -57,7 +57,7 @@ resource "aws_opensearchserverless_security_policy" "encryption" {
   policy = jsonencode({
     Rules = [
       {
-        Resource     = ["collection/${local.collection_name}"]
+        Resource     = ["collection/${var.collection_name != "" ? var.collection_name : "${var.name}-vectors"}"]
         ResourceType = "collection"
       }
     ]
@@ -75,11 +75,11 @@ resource "aws_opensearchserverless_security_policy" "network" {
     {
       Rules = [
         {
-          Resource     = ["collection/${local.collection_name}"]
+          Resource     = ["collection/${var.collection_name != "" ? var.collection_name : "${var.name}-vectors"}"]
           ResourceType = "collection"
         },
         {
-          Resource     = ["collection/${local.collection_name}"]
+          Resource     = ["collection/${var.collection_name != "" ? var.collection_name : "${var.name}-vectors"}"]
           ResourceType = "dashboard"
         }
       ]
@@ -98,7 +98,7 @@ resource "aws_opensearchserverless_access_policy" "data" {
     {
       Rules = [
         {
-          Resource     = ["collection/${local.collection_name}"]
+          Resource     = ["collection/${var.collection_name != "" ? var.collection_name : "${var.name}-vectors"}"]
           ResourceType = "collection"
           Permission = [
             "aoss:CreateCollectionItems",
@@ -108,7 +108,7 @@ resource "aws_opensearchserverless_access_policy" "data" {
           ]
         },
         {
-          Resource     = ["index/${local.collection_name}/*"]
+          Resource     = ["index/${var.collection_name != "" ? var.collection_name : "${var.name}-vectors"}/*"]
           ResourceType = "index"
           Permission = [
             "aoss:CreateIndex",
@@ -122,7 +122,7 @@ resource "aws_opensearchserverless_access_policy" "data" {
       ]
       Principal = concat(
         [aws_iam_role.bedrock_kb[0].arn],
-        [for id in var.allowed_account_ids : "arn:${local.partition}:iam::${id}:root"]
+        [for id in var.allowed_account_ids : "arn:${data.aws_partition.current.partition}:iam::${id}:root"]
       )
     }
   ])
@@ -131,7 +131,7 @@ resource "aws_opensearchserverless_access_policy" "data" {
 resource "aws_opensearchserverless_collection" "this" {
   count = var.create_opensearch_collection ? 1 : 0
 
-  name             = local.collection_name
+  name             = var.collection_name != "" ? var.collection_name : "${var.name}-vectors"
   type             = var.collection_type
   standby_replicas = var.standby_replicas
 
@@ -141,7 +141,7 @@ resource "aws_opensearchserverless_collection" "this" {
     aws_opensearchserverless_access_policy.data,
   ]
 
-  tags = local.common_tags
+  tags = var.tags
 }
 
 ################################################################################
@@ -154,7 +154,7 @@ resource "aws_iam_role" "bedrock_kb" {
   name               = "${var.name}-bedrock-kb"
   assume_role_policy = data.aws_iam_policy_document.bedrock_assume_role[0].json
 
-  tags = local.common_tags
+  tags = var.tags
 }
 
 resource "aws_iam_role_policy" "bedrock_kb" {
@@ -172,7 +172,7 @@ resource "aws_iam_role_policy" "bedrock_kb" {
 resource "aws_bedrockagent_knowledge_base" "this" {
   count = var.create_knowledge_base ? 1 : 0
 
-  name        = local.knowledge_base_name
+  name        = var.knowledge_base_name != "" ? var.knowledge_base_name : "${var.name}-kb"
   description = var.knowledge_base_description
   role_arn    = aws_iam_role.bedrock_kb[0].arn
 
@@ -180,7 +180,7 @@ resource "aws_bedrockagent_knowledge_base" "this" {
     type = "VECTOR"
 
     vector_knowledge_base_configuration {
-      embedding_model_arn = "arn:${local.partition}:bedrock:${local.region}::foundation-model/${var.embedding_model_id}"
+      embedding_model_arn = "arn:${data.aws_partition.current.partition}:bedrock:${data.aws_region.current.name}::foundation-model/${var.embedding_model_id}"
     }
   }
 
@@ -199,7 +199,7 @@ resource "aws_bedrockagent_knowledge_base" "this" {
     }
   }
 
-  tags = local.common_tags
+  tags = var.tags
 
   depends_on = [
     aws_iam_role_policy.bedrock_kb,
@@ -221,8 +221,8 @@ resource "aws_bedrockagent_data_source" "this" {
     type = "S3"
 
     s3_configuration {
-      bucket_arn              = local.data_source_bucket_arn
-      inclusion_prefixes      = [var.data_source_prefix]
+      bucket_arn         = var.create_data_source_bucket ? aws_s3_bucket.data_source[0].arn : var.existing_bucket_arn
+      inclusion_prefixes = [var.data_source_prefix]
     }
   }
 
@@ -252,7 +252,7 @@ resource "aws_iam_role" "lambda" {
   name               = "${var.name}-ingestion-lambda"
   assume_role_policy = data.aws_iam_policy_document.lambda_assume_role[0].json
 
-  tags = local.common_tags
+  tags = var.tags
 }
 
 resource "aws_iam_role_policy" "lambda" {
@@ -333,7 +333,7 @@ resource "aws_lambda_function" "ingestion" {
     }
   }
 
-  tags = local.common_tags
+  tags = var.tags
 }
 
 resource "aws_cloudwatch_log_group" "lambda" {
@@ -342,7 +342,7 @@ resource "aws_cloudwatch_log_group" "lambda" {
   name              = "/aws/lambda/${var.name}-ingestion"
   retention_in_days = 30
 
-  tags = local.common_tags
+  tags = var.tags
 }
 
 ################################################################################
@@ -355,7 +355,7 @@ resource "aws_iam_role" "sfn" {
   name               = "${var.name}-sfn"
   assume_role_policy = data.aws_iam_policy_document.sfn_assume_role[0].json
 
-  tags = local.common_tags
+  tags = var.tags
 }
 
 resource "aws_iam_role_policy" "sfn" {
@@ -369,7 +369,7 @@ resource "aws_iam_role_policy" "sfn" {
 resource "aws_sfn_state_machine" "ingestion" {
   count = var.create_step_function ? 1 : 0
 
-  name     = local.step_function_name
+  name     = var.step_function_name != "" ? var.step_function_name : "${var.name}-ingestion"
   role_arn = aws_iam_role.sfn[0].arn
 
   definition = jsonencode({
@@ -378,7 +378,7 @@ resource "aws_sfn_state_machine" "ingestion" {
     States = {
       TriggerIngestion = {
         Type     = "Task"
-        Resource = "arn:${local.partition}:states:::lambda:invoke"
+        Resource = "arn:${data.aws_partition.current.partition}:states:::lambda:invoke"
         Parameters = {
           FunctionName = var.create_ingestion_lambda ? aws_lambda_function.ingestion[0].arn : ""
           Payload = {
@@ -396,7 +396,7 @@ resource "aws_sfn_state_machine" "ingestion" {
       }
       CheckIngestionStatus = {
         Type     = "Task"
-        Resource = "arn:${local.partition}:states:::aws-sdk:bedrockagent:getIngestionJob"
+        Resource = "arn:${data.aws_partition.current.partition}:states:::aws-sdk:bedrockagent:getIngestionJob"
         Parameters = {
           "KnowledgeBaseId.$" = "$.knowledge_base_id"
           "DataSourceId.$"    = "$.data_source_id"
@@ -432,7 +432,7 @@ resource "aws_sfn_state_machine" "ingestion" {
     }
   })
 
-  tags = local.common_tags
+  tags = var.tags
 }
 
 ################################################################################
